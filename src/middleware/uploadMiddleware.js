@@ -24,7 +24,7 @@ if (isCloudinaryConfigured) {
     params: {
       folder: 'dream-app/audio',
       resource_type: 'video',
-      allowed_formats: ['mp3', 'wav', 'webm', 'm4a', 'ogg'],
+    allowed_formats: ['mp3', 'wav', 'webm', 'm4a', 'ogg', 'mp4', 'aac'],
     },
   });
 
