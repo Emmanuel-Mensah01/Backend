@@ -15,6 +15,40 @@ const ALLOWED = {
 
 const ALL_ALLOWED = Object.values(ALLOWED).flat();
 
+// ─── MIME type → extension map (for mobile uploads with no extension) ─────────
+const MIME_MAP = {
+  'image/jpeg':      'jpg',
+  'image/jpg':       'jpg',
+  'image/png':       'png',
+  'image/webp':      'webp',
+  'image/gif':       'gif',
+  'video/mp4':       'mp4',
+  'video/quicktime': 'mov',
+  'video/webm':      'webm',
+  'video/x-msvideo': 'avi',
+  'video/x-matroska':'mkv',
+  'audio/mpeg':      'mp3',
+  'audio/mp4':       'm4a',
+  'audio/wav':       'wav',
+  'audio/wave':      'wav',
+  'audio/ogg':       'ogg',
+  'audio/aac':       'aac',
+  'audio/webm':      'webm',
+};
+
+// ─── Helper: get effective extension from filename or MIME type ───────────────
+const getExt = (file) => {
+  const fromName = path.extname(file.originalname).slice(1).toLowerCase();
+  return fromName || MIME_MAP[file.mimetype] || '';
+};
+
+// ─── Shared file filter ───────────────────────────────────────────────────────
+const fileFilter = (req, file, cb) => {
+  const ext = getExt(file);
+  if (ALL_ALLOWED.includes(ext)) return cb(null, true);
+  cb(new Error(`Format .${ext || file.mimetype} not allowed. Allowed: ${ALL_ALLOWED.join(', ')}`));
+};
+
 let contentUpload;
 
 if (isCloudinaryConfigured) {
@@ -30,28 +64,22 @@ if (isCloudinaryConfigured) {
   const storage = new CloudinaryStorage({
     cloudinary,
     params: async (req, file) => {
-      const ext      = path.extname(file.originalname).slice(1).toLowerCase();
-      const isVideo  = ALLOWED.video.includes(ext);
-      const isAudio  = ALLOWED.audio.includes(ext);
-      const isPhoto  = ALLOWED.photo.includes(ext);
+      const ext     = getExt(file);
+      const isPhoto = ALLOWED.photo.includes(ext);
 
       return {
-        folder:        'dream-app/content',
-        resource_type: isPhoto ? 'image' : 'video', // Cloudinary uses 'video' for audio too
+        folder:          'dream-app/content',
+        resource_type:   isPhoto ? 'image' : 'video',
         allowed_formats: ALL_ALLOWED,
-        public_id: `content-${Date.now()}`,
+        public_id:       `content-${Date.now()}`,
       };
     },
   });
 
   contentUpload = multer({
     storage,
-    limits: { fileSize: 200 * 1024 * 1024 }, // 200 MB for videos
-    fileFilter: (req, file, cb) => {
-      const ext = path.extname(file.originalname).slice(1).toLowerCase();
-      if (ALL_ALLOWED.includes(ext)) return cb(null, true);
-      cb(new Error(`File format .${ext} is not allowed. Allowed: ${ALL_ALLOWED.join(', ')}`));
-    },
+    limits:     { fileSize: 200 * 1024 * 1024 },
+    fileFilter,
   });
 
 } else {
@@ -62,20 +90,16 @@ if (isCloudinaryConfigured) {
   const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, uploadDir),
     filename:    (req, file, cb) => {
-      const ext   = path.extname(file.originalname) || '.bin';
-      const fname = `content-${Date.now()}${ext}`;
+      const ext   = getExt(file);
+      const fname = `content-${Date.now()}${ext ? '.' + ext : '.bin'}`;
       cb(null, fname);
     },
   });
 
   contentUpload = multer({
     storage,
-    limits: { fileSize: 200 * 1024 * 1024 }, // 200 MB
-    fileFilter: (req, file, cb) => {
-      const ext = path.extname(file.originalname).slice(1).toLowerCase();
-      if (ALL_ALLOWED.includes(ext)) return cb(null, true);
-      cb(new Error(`File format .${ext} is not allowed. Allowed: ${ALL_ALLOWED.join(', ')}`));
-    },
+    limits:     { fileSize: 200 * 1024 * 1024 },
+    fileFilter,
   });
 }
 
