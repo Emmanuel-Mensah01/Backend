@@ -15,28 +15,28 @@ const ALLOWED = {
 
 const ALL_ALLOWED = Object.values(ALLOWED).flat();
 
-// ─── MIME type → extension map (for mobile uploads with no extension) ─────────
+// ─── MIME type → extension map (fixes mobile uploads with no file extension) ──
 const MIME_MAP = {
-  'image/jpeg':      'jpg',
-  'image/jpg':       'jpg',
-  'image/png':       'png',
-  'image/webp':      'webp',
-  'image/gif':       'gif',
-  'video/mp4':       'mp4',
-  'video/quicktime': 'mov',
-  'video/webm':      'webm',
-  'video/x-msvideo': 'avi',
-  'video/x-matroska':'mkv',
-  'audio/mpeg':      'mp3',
-  'audio/mp4':       'm4a',
-  'audio/wav':       'wav',
-  'audio/wave':      'wav',
-  'audio/ogg':       'ogg',
-  'audio/aac':       'aac',
-  'audio/webm':      'webm',
+  'image/jpeg':       'jpg',
+  'image/jpg':        'jpg',
+  'image/png':        'png',
+  'image/webp':       'webp',
+  'image/gif':        'gif',
+  'video/mp4':        'mp4',
+  'video/quicktime':  'mov',
+  'video/webm':       'webm',
+  'video/x-msvideo':  'avi',
+  'video/x-matroska': 'mkv',
+  'audio/mpeg':       'mp3',
+  'audio/mp4':        'm4a',
+  'audio/wav':        'wav',
+  'audio/wave':       'wav',
+  'audio/ogg':        'ogg',
+  'audio/aac':        'aac',
+  'audio/webm':       'webm',
 };
 
-// ─── Helper: get effective extension from filename or MIME type ───────────────
+// ─── Get effective extension from filename OR MIME type ───────────────────────
 const getExt = (file) => {
   const fromName = path.extname(file.originalname).slice(1).toLowerCase();
   return fromName || MIME_MAP[file.mimetype] || '';
@@ -46,7 +46,9 @@ const getExt = (file) => {
 const fileFilter = (req, file, cb) => {
   const ext = getExt(file);
   if (ALL_ALLOWED.includes(ext)) return cb(null, true);
-  cb(new Error(`Format .${ext || file.mimetype} not allowed. Allowed: ${ALL_ALLOWED.join(', ')}`));
+  cb(new Error(
+    `File format "${ext || file.mimetype}" is not allowed. Allowed: ${ALL_ALLOWED.join(', ')}`
+  ));
 };
 
 let contentUpload;
@@ -70,7 +72,10 @@ if (isCloudinaryConfigured) {
       return {
         folder:          'dream-app/content',
         resource_type:   isPhoto ? 'image' : 'video',
-        allowed_formats: ALL_ALLOWED,
+        // ✅ Use separate format lists — mixing them causes Cloudinary to reject uploads
+        allowed_formats: isPhoto
+          ? ALLOWED.photo                          // jpg, jpeg, png, webp, gif
+          : [...ALLOWED.video, ...ALLOWED.audio],  // mp4, mov, mp3, m4a, wav ...
         public_id:       `content-${Date.now()}`,
       };
     },
@@ -78,12 +83,12 @@ if (isCloudinaryConfigured) {
 
   contentUpload = multer({
     storage,
-    limits:     { fileSize: 200 * 1024 * 1024 },
+    limits:     { fileSize: 200 * 1024 * 1024 }, // 200 MB
     fileFilter,
   });
 
 } else {
-  // ── Local disk storage ────────────────────────────────────────────────────
+  // ── Local disk storage (fallback when Cloudinary is not configured) ────────
   const uploadDir = path.join(__dirname, '../../uploads');
   if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
@@ -98,7 +103,7 @@ if (isCloudinaryConfigured) {
 
   contentUpload = multer({
     storage,
-    limits:     { fileSize: 200 * 1024 * 1024 },
+    limits:     { fileSize: 200 * 1024 * 1024 }, // 200 MB
     fileFilter,
   });
 }
