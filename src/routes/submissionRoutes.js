@@ -1,11 +1,17 @@
 const express = require('express');
 const router = express.Router();
-const { createSubmission, getAllSubmissions, getSubmission, updateStatus } = require('../controllers/submissionController');
+const {
+  createSubmission,
+  getAllSubmissions,
+  getSubmission,
+  updateStatus,
+  deleteSubmission,           // ← NEW
+} = require('../controllers/submissionController');
 const { protect, pastorOnly } = require('../middleware/authMiddleware');
 const { upload } = require('../middleware/uploadMiddleware');
 const Submission = require('../models/Submission');
 
-// Phone lookup — must be BEFORE /:id route
+// Phone lookup — must be BEFORE /:id routes
 router.get('/find', async (req, res) => {
   const { phone } = req.query;
   if (!phone) return res.status(400).json({ success: false, message: 'Phone required.' });
@@ -20,9 +26,10 @@ router.get('/find', async (req, res) => {
   res.json({ success: true, reference: submission.paymentReference });
 });
 
-router.post('/', upload.single('audio'), createSubmission);
-router.get('/', protect, pastorOnly, getAllSubmissions);
-router.get('/:id', protect, pastorOnly, getSubmission);
-router.patch('/:id/status', protect, pastorOnly, updateStatus);
+router.post('/',              upload.single('audio'), createSubmission);
+router.get('/',               protect, pastorOnly, getAllSubmissions);
+router.get('/:id',            protect, pastorOnly, getSubmission);
+router.patch('/:id/status',   protect, pastorOnly, updateStatus);
+router.delete('/:id',         protect, pastorOnly, deleteSubmission); // ← NEW
 
 module.exports = router;

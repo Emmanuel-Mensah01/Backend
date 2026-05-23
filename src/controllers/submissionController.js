@@ -90,4 +90,51 @@ const updateStatus = async (req, res) => {
   res.json({ success: true, submission });
 };
 
-module.exports = { createSubmission, getAllSubmissions, getSubmission, updateStatus };
+// ─── DELETE /api/submissions/:id  (pastor only) ───────────────────────────────
+// Permanently removes a submission from the database.
+// The pastor uses this to clear out dreams they have already interpreted.
+const deleteSubmission = async (req, res) => {
+  const submission = await Submission.findById(req.params.id);
+  if (!submission) {
+    return res.status(404).json({ success: false, message: 'Submission not found.' });
+  }
+
+  // Optional: also remove audio file from Cloudinary if it exists
+  if (submission.audioPublicId) {
+    try {
+      const isCloudinaryConfigured =
+        process.env.CLOUDINARY_CLOUD_NAME &&
+        process.env.CLOUDINARY_CLOUD_NAME !== 'your_cloudinary_name';
+
+      if (isCloudinaryConfigured) {
+        const cloudinary = require('cloudinary').v2;
+        await cloudinary.uploader.destroy(submission.audioPublicId, { resource_type: 'video' });
+      }
+    } catch (err) {
+      // Non-fatal — log and continue with DB deletion
+      console.warn('[deleteSubmission] Cloudinary cleanup failed:', err.message);
+    }
+  }
+
+  // Also clean up interpretation audio if it exists
+  if (submission.interpretation?.audioPublicId) {
+    try {
+      const isCloudinaryConfigured =
+        process.env.CLOUDINARY_CLOUD_NAME &&
+        process.env.CLOUDINARY_CLOUD_NAME !== 'your_cloudinary_name';
+
+      if (isCloudinaryConfigured) {
+        const cloudinary = require('cloudinary').v2;
+        await cloudinary.uploader.destroy(submission.interpretation.audioPublicId, { resource_type: 'video' });
+      }
+    } catch (err) {
+      console.warn('[deleteSubmission] Cloudinary interpretation cleanup failed:', err.message);
+    }
+  }
+
+  await submission.deleteOne();
+
+  res.json({ success: true, message: 'Submission deleted successfully.' });
+};
+
+module.exports = { createSubmission, getAllSubmissions, getSubmission, updateStatus, deleteSubmission };
