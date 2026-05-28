@@ -2,14 +2,29 @@ const { initializeTransaction, verifyTransaction } = require('../services/paysta
 const { MIN_OFFERING_GHS } = require('../config/constants');
 const crypto = require('crypto');
 
-const isDev = process.env.NODE_ENV !== 'production';
+// ─── Bypass conditions ────────────────────────────────────────────────────────
+// Bypass Paystack when ANY of these are true:
+//   1. NODE_ENV is not 'production'
+//   2. BYPASS_PAYMENT env var is 'true'
+//   3. Paystack key is still the placeholder value
+const isPaystackConfigured =
+  process.env.PAYSTACK_SECRET_KEY &&
+  !process.env.PAYSTACK_SECRET_KEY.includes('your_paystack');
 
-// POST /api/payments/initialize
+const isBypassMode =
+  process.env.NODE_ENV !== 'production' ||
+  process.env.BYPASS_PAYMENT === 'true' ||
+  !isPaystackConfigured;
+
+// ─── POST /api/payments/initialize ───────────────────────────────────────────
 const initializePayment = async (req, res) => {
   const { name, phone, email, amount } = req.body;
 
   if (!name || !phone || !amount) {
-    return res.status(400).json({ success: false, message: 'Name, phone, and amount are required.' });
+    return res.status(400).json({
+      success: false,
+      message: 'Name, phone, and amount are required.',
+    });
   }
 
   if (Number(amount) < MIN_OFFERING_GHS) {
@@ -19,8 +34,8 @@ const initializePayment = async (req, res) => {
     });
   }
 
-  // DEV MODE — bypass Paystack completely
-  if (isDev) {
+  // ── BYPASS MODE — instant redirect, no Paystack call ──────────────────────
+  if (isBypassMode) {
     const devRef = `DEV-${Date.now()}`;
     return res.json({
       success: true,
@@ -29,9 +44,9 @@ const initializePayment = async (req, res) => {
     });
   }
 
-  // PRODUCTION — use real Paystack
-  const payerEmail = email || `${phone.replace(/\s/g, '')}@dreamapp.com`;
-  const reference = `DREAM-${crypto.randomBytes(8).toString('hex').toUpperCase()}`;
+  // ── PRODUCTION — real Paystack transaction ─────────────────────────────────
+  const payerEmail  = email || `${phone.replace(/\s/g, '')}@dreamapp.com`;
+  const reference   = `DREAM-${crypto.randomBytes(8).toString('hex').toUpperCase()}`;
   const callbackUrl = `${process.env.FRONTEND_URL}/submission?reference=${reference}`;
 
   const data = await initializeTransaction({
@@ -49,21 +64,33 @@ const initializePayment = async (req, res) => {
   });
 };
 
-// GET /api/payments/verify/:reference
+// ─── GET /api/payments/verify/:reference ─────────────────────────────────────
 const verifyPayment = async (req, res) => {
   const { reference } = req.params;
 
-  // DEV MODE — auto verify
-  if (isDev && reference.startsWith('DEV-')) {
+  // Always auto-verify DEV- prefixed references
+  if (reference.startsWith('DEV-')) {
     return res.json({
       success: true,
       verified: true,
       reference,
-      amount: 50,
-      payer: { name: 'Dev User', phone: '0000000000' },
+      amount: MIN_OFFERING_GHS,
+      payer: { name: 'Test User', phone: '0000000000' },
     });
   }
 
+  // Bypass mode — auto verify
+  if (isBypassMode) {
+    return res.json({
+      success: true,
+      verified: true,
+      reference,
+      amount: MIN_OFFERING_GHS,
+      payer: { name: 'Test User', phone: '0000000000' },
+    });
+  }
+
+  // PRODUCTION — verify with Paystack
   const data = await verifyTransaction(reference);
 
   if (data.data.status !== 'success') {
